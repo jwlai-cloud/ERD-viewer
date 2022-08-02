@@ -31,10 +31,7 @@ class Table:
         self.fks = {}               # dictionary with FK constraints, by name + list of FK columns
 
     def getColumn(self, name):
-        for column in self.columns:
-            if column.name == name:
-                return column
-        return None
+        return next((column for column in self.columns if column.name == name), None)
 
     def getUniques(self, name):
         constraint = self.uniques[name]
@@ -84,14 +81,14 @@ class Table:
         color = fillcolor = bgcolor = "transparent"
         icolor = tcolor = "#000000"
         style = "rounded"
-        if theme == "Common Gray" or theme == "Common Gray Box":
+        if theme in ["Common Gray", "Common Gray Box"]:
             color = "#6c6c6c"
             bgcolor = "#e0e0e0"
-            fillcolor = "#f5f5f5" if not isCollapsed else bgcolor
+            fillcolor = bgcolor if isCollapsed else "#f5f5f5"
         elif theme == "Blue Navy":
             color = "#1a5282"
             bgcolor = "#1a5282"
-            fillcolor = "#ffffff" if not isCollapsed else bgcolor
+            fillcolor = bgcolor if isCollapsed else "#ffffff"
             tcolor = "#ffffff"
         elif theme == "Gradient Green":
             color = "#716f64"
@@ -117,11 +114,14 @@ class Table:
                 if column.identity: name = f"{name} I"
                 if column.isunique: name = f"{name} U"
 
-                if isFull:
-                    s += (f'      <tr><td align="left"><font color="{icolor}">{name}&nbsp;</font></td>\n'
-                        + f'        <td align="left"><font color="{icolor}">{column.datatype}</font></td></tr>\n')
-                else:
-                    s += f'      <tr><td align="left"><font color="{icolor}">{name}</font></td></tr>\n'
+                s += (
+                    (
+                        f'      <tr><td align="left"><font color="{icolor}">{name}&nbsp;</font></td>\n'
+                        + f'        <td align="left"><font color="{icolor}">{column.datatype}</font></td></tr>\n'
+                    )
+                    if isFull
+                    else f'      <tr><td align="left"><font color="{icolor}">{name}</font></td></tr>\n'
+                )
 
         return s + '    </table>>\n  ]\n'
 
@@ -136,7 +136,7 @@ class Table:
         for constraint in self.fks:
             fks = self.fks[constraint]
             fk1 = fks[0]
-            dashed = "" if not fk1.nullable else ' style="dashed"'
+            dashed = ' style="dashed"' if fk1.nullable else ""
             arrow = "" if fk1.ispk and len(self.pks) == len(fk1.fkof.table.pks) else ' arrowtail="crow"'
             s += f'  {self.label} -> {fk1.fkof.table.label} [ penwidth="{penwidth}" color="{pencolor}"{dashed}{arrow} ]\n'
         return s
@@ -161,9 +161,9 @@ class Column:
     # outputs the column definition in a CREATE TABLE statement, for the parent table
     def getCreateColumn(self):
         nullable = "" if self.nullable or (self.ispk and len(self.table.pks) == 1) else " not null"
-        identity = "" if not self.identity else " identity"
+        identity = " identity" if self.identity else ""
         pk = "" if not self.ispk or len(self.table.pks) >= 2 else " primary key"
-        
+
         comment = self.comment.replace("'", "''")
         if comment != '':
             comment = f" comment '{comment}'"
@@ -200,8 +200,8 @@ def importMetadata(tables, cur):
         if column.datatype == "FIXED":
             column.datatype = "NUMBER"
         elif "fixed" in datatype:
-            fixed = bool(datatype["fixed"])
             if column.datatype == "TEXT":
+                fixed = bool(datatype["fixed"])
                 column.datatype = "CHAR" if fixed else "VARCHAR"
 
         if "length" in datatype:
@@ -222,7 +222,7 @@ def importMetadata(tables, cur):
                 #if column.datatype.startswith("NUMBER("):
                 #    column.datatype = f"FLOAT({str(datatype['precision'])},{str(datatype['scale'])})"
         column.datatype = column.datatype.lower()
-        
+
     # get UNIQUE constraints
     results = cur.execute("show unique keys").fetchall()
     for row in results:
@@ -290,10 +290,7 @@ def dumpDotERD(tables, theme, filename):
     isCollapsed = filename.endswith("-relationships")
     isFull = filename.endswith("-full") 
 
-    shape = "Mrecord"
-    if " Box" in theme:
-        shape = "record"
-
+    shape = "record" if " Box" in theme else "Mrecord"
     s = ('# You may copy and paste all this to http://viz-js.com/\n\n'
         + 'digraph G {\n'
         + '  graph [ rankdir="LR" bgcolor="#ffffff" ]\n'
